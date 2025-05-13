@@ -41,7 +41,7 @@ function install_xremap() {
   echo "⚙ Setting up config..."
   mkdir -p "$APP_DIR"
   cat > "$APP_DIR/config.yml" <<EOF
-keypress_delay_ms: 20
+keypress_delay_ms: 2
 
 modmap:
   - name: caps2ctrl
