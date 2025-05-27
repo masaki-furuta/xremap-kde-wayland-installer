@@ -1,6 +1,6 @@
-# xremap_installer_v3b.sh - KDE Wayland + xremap 完全自動インストーラー
-
 #!/bin/bash
+#
+# xremap_installer_v3b.sh - KDE Wayland +xremap fully automatic installer
 
 set -e
 
@@ -12,7 +12,7 @@ SERVICE_DIR="$HOME/.config/systemd/user"
 BIN_PATH="$HOME/.local/bin/xremap"
 SERVICE_FILE="$SERVICE_DIR/xremap.service"
 AUTOSTART_FILE="$HOME/.config/autostart/xremap.desktop"
-XREMAP_VERSION="v0.10.10"
+XREMAP_VERSION="v0.10.12"
 ARCHIVE="xremap-linux-x86_64-kde.zip"
 BIN_DL_URL="https://github.com/xremap/xremap/releases/download/${XREMAP_VERSION}/${ARCHIVE}"
 
@@ -67,6 +67,7 @@ keymap:
       C-Shift-n: C-n
       C-Shift-p: C-p
       C-Shift-f: C-f
+      C-Shift-a: C-a
 EOF
 
   echo "🛠 Creating user systemd service..."
@@ -130,7 +131,7 @@ function uninstall_xremap() {
 }
 
 # ==============================
-# メイン
+# main
 # ==============================
 case "$1" in
   install)
