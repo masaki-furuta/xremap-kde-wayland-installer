@@ -51,7 +51,7 @@ modmap:
 keymap:
   - name: Emacs style keys
     application:
-      only: ["microsoft-edge", "google-chrome", "firefox", "org.kde.dolphin", "org.kde.kate", "org.kde.kwrite", "org.kde.discover", "org.kde.systemsettings"]
+      only: ["Microsoft-edge", "google-chrome", "firefox", "org.kde.dolphin", "org.kde.kate", "org.kde.kwrite", "org.kde.discover", "org.kde.systemsettings"]
     remap:
       C-a: home
       C-e: end
