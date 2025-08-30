@@ -47,6 +47,15 @@ modmap:
   - name: caps2ctrl
     remap:
       CapsLock: Control_L
+  - name: kp2volume
+    remap:
+      KEY_KPPLUS: KEY_VOLUMEUP
+      KEY_KPMINUS: KEY_VOLUMEDOWN
+      KEY_KPASTERISK: KEY_MUTE
+#  - name: cmd2alt
+#    remap:
+#      KEY_LEFTALT: KEY_LEFTMETA
+#      KEY_LEFTMETA: KEY_LEFTALT
 
 keymap:
   - name: Emacs style keys
