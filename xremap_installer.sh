@@ -12,7 +12,7 @@ SERVICE_DIR="$HOME/.config/systemd/user"
 BIN_PATH="$HOME/.local/bin/xremap"
 SERVICE_FILE="$SERVICE_DIR/xremap.service"
 AUTOSTART_FILE="$HOME/.config/autostart/xremap.desktop"
-XREMAP_VERSION="v0.10.17"
+XREMAP_VERSION="v0.14.0"
 ARCHIVE="xremap-linux-x86_64-kde.zip"
 BIN_DL_URL="https://github.com/xremap/xremap/releases/download/${XREMAP_VERSION}/${ARCHIVE}"
 
