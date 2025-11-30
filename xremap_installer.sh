@@ -108,9 +108,9 @@ EOF
   systemctl --user daemon-reexec
   systemctl --user enable xremap.service
 
-  echo "\n✅ Installation complete!"
+  echo "✅ Installation complete!"
   echo "⚠ Please log out and back in to apply group membership."
-  echo "   Then start with: systemctl --user restart xremap.service\n"
+  echo "   Then start with: systemctl --user restart xremap.service"
 }
 
 function uninstall_xremap() {
@@ -127,7 +127,7 @@ function uninstall_xremap() {
   echo "🗑 Removing binary..."
   rm -fv "$BIN_PATH"
 
-  echo "\n✅ Uninstallation complete!"
+  echo "✅ Uninstallation complete!"
 }
 
 # ==============================
