@@ -1,46 +1,128 @@
 #!/bin/bash
 #
-# xremap_installer_v3b.sh - KDE Wayland +xremap fully automatic installer
+# xremap_installer.sh - KDE Wayland + xremap installer (user systemd)
+#
+# Notes:
+# - Fixes the "input group membership not reflected in NSS" case by creating/updating /etc/group override
+#   when getent group input does not list $USER (common on systems with /usr/lib/group base + /etc/group override).
+# - Requires logout/login for the new group to apply to already-running user sessions/services.
 
 set -e
 
 # ==============================
-# 設定
+# Settings
 # ==============================
 APP_DIR="$HOME/.config/xremap"
 SERVICE_DIR="$HOME/.config/systemd/user"
 BIN_PATH="$HOME/.local/bin/xremap"
 SERVICE_FILE="$SERVICE_DIR/xremap.service"
 AUTOSTART_FILE="$HOME/.config/autostart/xremap.desktop"
-XREMAP_VERSION="v0.14.11"
+
+XREMAP_VERSION="v0.14.5"
 ARCHIVE="xremap-linux-x86_64-kde.zip"
 BIN_DL_URL="https://github.com/xremap/xremap/releases/download/${XREMAP_VERSION}/${ARCHIVE}"
 
 # ==============================
-# 関数
+# Functions
 # ==============================
-function check_requirements() {
+check_requirements() {
   echo "✅ Checking required tools..."
-  for cmd in curl unzip sudo setcap systemctl; do
-    command -v $cmd >/dev/null 2>&1 || { echo "❌ $cmd is not installed."; exit 1; }
+  for cmd in curl unzip sudo setcap systemctl getent awk mktemp install; do
+    command -v "$cmd" >/dev/null 2>&1 || { echo "❌ $cmd is not installed."; exit 1; }
   done
 }
 
-function install_xremap() {
+# Ensure $USER is reflected as a member of the "input" group via NSS (getent).
+# On some systems, the group is defined in /usr/lib/group and usermod may not create an /etc/group override
+# entry; then getent group input shows no members, and membership does not persist after relogin.
+ensure_user_in_input_group() {
+  local user="$1"
+  local group="input"
+
+  local entry gid members
+  entry="$(getent group "$group" || true)"
+  if [[ -z "$entry" ]]; then
+    echo "❌ Group '$group' was not found (getent group $group)."
+    exit 1
+  fi
+
+  gid="$(echo "$entry" | cut -d: -f3)"
+  members="$(echo "$entry" | cut -d: -f4)"
+
+  # Already reflected in NSS
+  if echo ",${members}," | grep -q ",${user},"; then
+    return 0
+  fi
+
+  # If /etc/group is not readable, do not attempt to generate a new one (dangerous).
+  if [[ ! -r /etc/group ]]; then
+    echo "❌ /etc/group is not readable. Cannot safely create override for '${group}'."
+    echo "   Please check permissions/FS state, then re-run."
+    exit 1
+  fi
+
+  if ! grep -qE "^${group}:" /etc/group 2>/dev/null; then
+    echo "⚠ /etc/group has no '${group}' entry; creating a local override (GID=${gid})..."
+  else
+    echo "⚠ '${user}' is not listed in '${group}' via NSS. Updating /etc/group override (GID=${gid})..."
+  fi
+
+  # Best-effort backup
+  sudo cp -a /etc/group "/etc/group.bak.xremap.$(date +%F-%H%M%S)" 2>/dev/null || true
+
+  local tmp
+  tmp="$(mktemp)"
+
+  # Update existing /etc/group entry for 'input' or append a new one with the same GID.
+  awk -F: -v OFS=: -v g="$group" -v gid="$gid" -v u="$user" '
+    BEGIN { seen=0 }
+    $1==g {
+      seen=1
+      $3=gid
+      if ($4=="") { $4=u }
+      else {
+        n=split($4,a,","); found=0
+        for (i=1; i<=n; i++) if (a[i]==u) found=1
+        if (!found) $4=$4 "," u
+      }
+    }
+    { print }
+    END {
+      if (!seen) print g, "x", gid, u
+    }
+  ' /etc/group > "$tmp"
+
+  sudo install -m 0644 -o root -g root "$tmp" /etc/group
+  rm -f "$tmp"
+
+  # Re-check (this ensures it persists for *new* logins; already-running sessions still need relogin)
+  members="$(getent group "$group" | cut -d: -f4)"
+  if ! echo ",${members}," | grep -q ",${user},"; then
+    echo "⚠ Still not reflected: getent group ${group} => $(getent group "${group}" || true)"
+    echo "⚠ Please check /etc/group and /etc/nsswitch.conf (group: ... merge)."
+  fi
+}
+
+install_xremap() {
   check_requirements
 
   echo "🔽 Downloading xremap binary..."
-  mkdir -p /tmp/xremap-installer
-  cd /tmp/xremap-installer
-  curl -LO "$BIN_DL_URL"
-  unzip -o "$ARCHIVE"
-  chmod +x xremap
-  mkdir -p "$HOME/.local/bin"
-  mv -f xremap "$BIN_PATH"
+  tmpdir="$(mktemp -d)"
+  (
+    cd "$tmpdir"
+    curl -L -o "$ARCHIVE" "$BIN_DL_URL"
+    unzip -o "$ARCHIVE"
+    chmod +x xremap
+    mkdir -p "$(dirname "$BIN_PATH")"
+    mv -f xremap "$BIN_PATH"
+  )
+  rm -rf "$tmpdir"
 
   echo "⚙ Setting up config..."
   mkdir -p "$APP_DIR"
-  cat > "$APP_DIR/config.yml" <<EOF
+  # If you already have config.yml, keep it. Create a minimal one if missing.
+  if [[ ! -f "$APP_DIR/config.yml" ]]; then
+    cat > "$APP_DIR/config.yml" <<'EOF'
 keypress_delay_ms: 2
 
 modmap:
@@ -69,6 +151,7 @@ keymap:
       C-Shift-f: C-f
       C-Shift-a: C-a
 EOF
+  fi
 
   echo "🛠 Creating user systemd service..."
   mkdir -p "$SERVICE_DIR"
@@ -80,7 +163,6 @@ After=graphical-session.target
 [Service]
 ExecStart=${BIN_PATH} --watch ${APP_DIR}/config.yml
 Restart=always
-Environment=WAYLAND_DISPLAY=wayland-0
 
 [Install]
 WantedBy=default.target
@@ -88,7 +170,7 @@ EOF
 
   echo "🖼 Setting up autostart entry..."
   mkdir -p "$(dirname "$AUTOSTART_FILE")"
-  cat > "$AUTOSTART_FILE" <<EOF
+  cat > "$AUTOSTART_FILE" <<'EOF'
 [Desktop Entry]
 Type=Application
 Exec=systemctl --user restart xremap.service
@@ -100,6 +182,7 @@ EOF
 
   echo "👥 Adding user to input group (may require relogin)..."
   sudo usermod -aG input "$USER"
+  ensure_user_in_input_group "$USER"
 
   echo "🔐 Setting cap_dac_override capability on xremap..."
   sudo setcap cap_dac_override+ep "$BIN_PATH"
@@ -113,7 +196,7 @@ EOF
   echo "   Then start with: systemctl --user restart xremap.service"
 }
 
-function uninstall_xremap() {
+uninstall_xremap() {
   echo "🧹 Stopping and disabling user service..."
   systemctl --user disable --now xremap.service || true
   rm -fv "$SERVICE_FILE"
@@ -131,9 +214,9 @@ function uninstall_xremap() {
 }
 
 # ==============================
-# main
+# Main
 # ==============================
-case "$1" in
+case "${1:-}" in
   install)
     install_xremap
     ;;
